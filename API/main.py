@@ -5,7 +5,6 @@ from pydantic import BaseModel, Field
 from database import get_db, init_db
 import hashlib
 import secrets
-import base64
 from datetime import datetime
 
 app = FastAPI(title="JED - Just Enough Drives")
@@ -34,7 +33,7 @@ def hash_password(password: str) -> str:
 def get_space_from_token(token: str):
     db = get_db()
     result = db.execute(
-        "SELECT space_id FROM sessions WHERE token = ?", [token]
+        "SELECT space_id FROM sessions WHERE token = ?", (token,)
     ).fetchone()
     if not result:
         raise HTTPException(401, "Invalid or expired token")
@@ -53,7 +52,7 @@ async def create_space(space: SpaceCreate):
     db = get_db()
     
     existing = db.execute(
-        "SELECT space_id FROM spaces WHERE space_id = ?", [space.space_id]
+        "SELECT space_id FROM spaces WHERE space_id = ?", (space.space_id,)
     ).fetchone()
     
     if existing:
@@ -61,7 +60,7 @@ async def create_space(space: SpaceCreate):
     
     db.execute(
         "INSERT INTO spaces (space_id, password_hash, created_at) VALUES (?, ?, ?)",
-        [space.space_id, hash_password(space.password), datetime.utcnow().isoformat()]
+        (space.space_id, hash_password(space.password), datetime.utcnow().isoformat())
     )
     db.commit()
     return {"message": "Space created", "space_id": space.space_id}
@@ -71,7 +70,7 @@ async def login_space(space: SpaceLogin):
     db = get_db()
     
     result = db.execute(
-        "SELECT password_hash FROM spaces WHERE space_id = ?", [space.space_id]
+        "SELECT password_hash FROM spaces WHERE space_id = ?", (space.space_id,)
     ).fetchone()
     
     if not result or result[0] != hash_password(space.password):
@@ -80,11 +79,10 @@ async def login_space(space: SpaceLogin):
     token = secrets.token_urlsafe(32)
     db.execute(
         "INSERT INTO sessions (token, space_id, created_at) VALUES (?, ?, ?)",
-        [token, space.space_id, datetime.utcnow().isoformat()]
+        (token, space.space_id, datetime.utcnow().isoformat())
     )
     db.commit()
     return {"token": token, "space_id": space.space_id}
-
 
 @app.get("/files")
 async def list_files(token: str):
@@ -93,7 +91,7 @@ async def list_files(token: str):
     
     files = db.execute(
         "SELECT id, filename, size, uploaded_at FROM files WHERE space_id = ?",
-        [space_id]
+        (space_id,)
     ).fetchall()
     
     return [{"id": f[0], "filename": f[1], "size": f[2], "uploaded_at": f[3]} for f in files]
@@ -110,7 +108,7 @@ async def upload_file(token: str = Form(...), file: UploadFile = File(...)):
     db = get_db()
     db.execute(
         "INSERT INTO files (space_id, filename, content, size, uploaded_at) VALUES (?, ?, ?, ?, ?)",
-        [space_id, file.filename, content, len(content), datetime.utcnow().isoformat()]
+        (space_id, file.filename, content, len(content), datetime.utcnow().isoformat())
     )
     db.commit()
     
@@ -123,7 +121,7 @@ async def download_file(file_id: int, token: str):
     
     file = db.execute(
         "SELECT filename, content FROM files WHERE id = ? AND space_id = ?",
-        [file_id, space_id]
+        (file_id, space_id)
     ).fetchone()
     
     if not file:
@@ -142,13 +140,13 @@ async def delete_file(file_id: int, token: str):
     
     file = db.execute(
         "SELECT id FROM files WHERE id = ? AND space_id = ?",
-        [file_id, space_id]
+        (file_id, space_id)
     ).fetchone()
     
     if not file:
         raise HTTPException(404, "File not found")
     
-    db.execute("DELETE FROM files WHERE id = ?", [file_id])
+    db.execute("DELETE FROM files WHERE id = ?", (file_id,))
     db.commit()
     
     return {"message": "File deleted"}
@@ -156,6 +154,6 @@ async def delete_file(file_id: int, token: str):
 @app.post("/spaces/logout")
 async def logout(token: str):
     db = get_db()
-    db.execute("DELETE FROM sessions WHERE token = ?", [token])
+    db.execute("DELETE FROM sessions WHERE token = ?", (token,))
     db.commit()
     return {"message": "Logged out"}
