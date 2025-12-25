@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JED - Just Enough Drives</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📁 JED</h1>
+            <p class="tagline">Just Enough Drives</p>
+        </header>
+
+        <main id="auth-section">
+            <div class="tabs">
+                <button class="tab active" data-tab="login">Enter Space</button>
+                <button class="tab" data-tab="create">Create Space</button>
+            </div>
+
+            <!-- Login Form -->
+            <form id="login-form" class="form active">
+                <div class="input-group">
+                    <label for="login-id">Space ID</label>
+                    <input type="text" id="login-id" placeholder="my-cool-space" required>
+                </div>
+                <div class="input-group">
+                    <label for="login-pass">Password</label>
+                    <input type="password" id="login-pass" placeholder="••••••" required>
+                </div>
+                <button type="submit" class="btn primary">Enter</button>
+            </form>
+
+            <!-- Create Form -->
+            <form id="create-form" class="form">
+                <div class="input-group">
+                    <label for="create-id">Space ID</label>
+                    <input type="text" id="create-id" placeholder="pick-a-unique-name" pattern="^[a-zA-Z0-9_-]+$" required>
+                    <small>Letters, numbers, dashes, underscores only</small>
+                </div>
+                <div class="input-group">
+                    <label for="create-pass">Password</label>
+                    <input type="password" id="create-pass" placeholder="min 4 characters" minlength="4" required>
+                </div>
+                <button type="submit" class="btn primary">Create Space</button>
+            </form>
+
+            <p id="message" class="message"></p>
+        </main>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

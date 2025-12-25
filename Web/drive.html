@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Space - JED</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="drive-header">
+            <div>
+                <h1>📁 <span id="space-name">Loading...</span></h1>
+            </div>
+            <button id="logout-btn" class="btn secondary">Logout</button>
+        </header>
+
+        <main class="drive-main">
+            <!-- Upload Section -->
+            <div class="upload-section">
+                <label for="file-input" class="upload-area">
+                    <span class="upload-icon">📤</span>
+                    <span>Click or drag files here</span>
+                    <input type="file" id="file-input" multiple hidden>
+                </label>
+            </div>
+
+            <!-- Files List -->
+            <div class="files-section">
+                <h2>Your Files</h2>
+                <div id="files-list" class="files-list">
+                    <p class="loading">Loading files...</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/drive.js"></script>
+</body>
+</html>
