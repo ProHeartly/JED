@@ -1,4 +1,5 @@
 const API_URL = 'https://jed-uv1d.onrender.com';
+const REQUEST_TIMEOUT = 60000;
 
 const token = localStorage.getItem('jed_token');
 const spaceId = localStorage.getItem('jed_space');
@@ -6,6 +7,24 @@ const spaceId = localStorage.getItem('jed_space');
 // Redirect if not logged in
 if (!token || !spaceId) {
     window.location.href = 'index.html';
+}
+
+// Helper for fetch with timeout
+async function fetchWithWakeup(url, options = {}) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+    
+    try {
+        const res = await fetch(url, { ...options, signal: controller.signal });
+        clearTimeout(timeout);
+        return res;
+    } catch (err) {
+        clearTimeout(timeout);
+        if (err.name === 'AbortError') {
+            throw new Error('Server is taking too long. Try again.');
+        }
+        throw err;
+    }
 }
 
 // Set space name
@@ -36,9 +55,10 @@ function getFileIcon(filename) {
 // Load files
 async function loadFiles() {
     const filesList = document.getElementById('files-list');
+    filesList.innerHTML = '<p class="loading">Loading files... (server may be waking up)</p>';
     
     try {
-        const res = await fetch(`${API_URL}/files?token=${token}`);
+        const res = await fetchWithWakeup(`${API_URL}/files?token=${token}`);
         
         if (res.status === 401) {
             localStorage.clear();
@@ -70,7 +90,7 @@ async function loadFiles() {
         `).join('');
         
     } catch (err) {
-        filesList.innerHTML = '<p class="empty">Error loading files</p>';
+        filesList.innerHTML = `<p class="empty">${err.message || 'Error loading files'}</p>`;
     }
 }
 
@@ -81,7 +101,7 @@ async function uploadFile(file) {
     formData.append('file', file);
     
     try {
-        const res = await fetch(`${API_URL}/files/upload`, {
+        const res = await fetchWithWakeup(`${API_URL}/files/upload`, {
             method: 'POST',
             body: formData
         });
@@ -93,7 +113,7 @@ async function uploadFile(file) {
         
         loadFiles();
     } catch (err) {
-        alert('Upload error');
+        alert(err.message || 'Upload error');
     }
 }
 
@@ -107,7 +127,7 @@ async function deleteFile(fileId) {
     if (!confirm('Delete this file?')) return;
     
     try {
-        const res = await fetch(`${API_URL}/files/${fileId}?token=${token}`, {
+        const res = await fetchWithWakeup(`${API_URL}/files/${fileId}?token=${token}`, {
             method: 'DELETE'
         });
         
@@ -118,7 +138,7 @@ async function deleteFile(fileId) {
         
         loadFiles();
     } catch (err) {
-        alert('Delete error');
+        alert(err.message || 'Delete error');
     }
 }
 
