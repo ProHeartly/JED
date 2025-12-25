@@ -114,6 +114,12 @@ async def upload_file(token: str = Form(...), file: UploadFile = File(...)):
     
     return {"message": "File uploaded", "filename": file.filename}
 
+import mimetypes
+
+def get_content_type(filename: str) -> str:
+    mime_type, _ = mimetypes.guess_type(filename)
+    return mime_type or "application/octet-stream"
+
 @app.get("/files/download/{file_id}")
 async def download_file(file_id: int, token: str):
     space_id = get_space_from_token(token)
@@ -131,6 +137,27 @@ async def download_file(file_id: int, token: str):
         content=file[1],
         media_type="application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{file[0]}"'}
+    )
+
+@app.get("/files/preview/{file_id}")
+async def preview_file(file_id: int, token: str):
+    space_id = get_space_from_token(token)
+    db = get_db()
+    
+    file = db.execute(
+        "SELECT filename, content FROM files WHERE id = ? AND space_id = ?",
+        (file_id, space_id)
+    ).fetchone()
+    
+    if not file:
+        raise HTTPException(404, "File not found")
+    
+    content_type = get_content_type(file[0])
+    
+    return Response(
+        content=file[1],
+        media_type=content_type,
+        headers={"Content-Disposition": f'inline; filename="{file[0]}"'}
     )
 
 @app.delete("/files/{file_id}")

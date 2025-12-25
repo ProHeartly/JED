@@ -273,3 +273,91 @@ header h1 {
     border-color: #4f46e5;
     background: rgba(79, 70, 229, 0.2);
 }
+
+
+/* Preview Modal */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal.active {
+    display: flex;
+}
+
+.modal-content {
+    background: #1a1a2e;
+    border-radius: 12px;
+    max-width: 90%;
+    max-height: 90%;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    border-bottom: 1px solid #333;
+}
+
+.modal-header span {
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 80%;
+}
+
+.modal-close {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+}
+
+.preview-container {
+    padding: 1rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: auto;
+    max-height: 80vh;
+}
+
+.preview-container img {
+    max-width: 100%;
+    max-height: 70vh;
+    object-fit: contain;
+}
+
+.preview-container video,
+.preview-container audio {
+    max-width: 100%;
+    max-height: 70vh;
+}
+
+.preview-container audio {
+    width: 100%;
+    min-width: 300px;
+}
+
+.file-item {
+    cursor: pointer;
+}
+
+.file-item:hover {
+    background: #1a1a2e;
+}

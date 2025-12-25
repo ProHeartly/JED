@@ -52,6 +52,61 @@ function getFileIcon(filename) {
     return icons[ext] || '📁';
 }
 
+// Check if file is previewable
+function isPreviewable(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    const previewable = {
+        image: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'],
+        video: ['mp4', 'webm', 'ogg', 'mov'],
+        audio: ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac']
+    };
+    
+    if (previewable.image.includes(ext)) return 'image';
+    if (previewable.video.includes(ext)) return 'video';
+    if (previewable.audio.includes(ext)) return 'audio';
+    return null;
+}
+
+// Preview file
+function previewFile(fileId, filename) {
+    const type = isPreviewable(filename);
+    if (!type) {
+        downloadFile(fileId, filename);
+        return;
+    }
+    
+    const url = `${API_URL}/files/preview/${fileId}?token=${token}`;
+    const container = document.getElementById('preview-container');
+    document.getElementById('preview-title').textContent = filename;
+    
+    if (type === 'image') {
+        container.innerHTML = `<img src="${url}" alt="${filename}">`;
+    } else if (type === 'video') {
+        container.innerHTML = `<video controls autoplay><source src="${url}"></video>`;
+    } else if (type === 'audio') {
+        container.innerHTML = `<audio controls autoplay><source src="${url}"></audio>`;
+    }
+    
+    document.getElementById('preview-modal').classList.add('active');
+}
+
+// Close preview
+function closePreview() {
+    const modal = document.getElementById('preview-modal');
+    modal.classList.remove('active');
+    document.getElementById('preview-container').innerHTML = '';
+}
+
+// Close on escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closePreview();
+});
+
+// Close on backdrop click
+document.getElementById('preview-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'preview-modal') closePreview();
+});
+
 // Load files
 async function loadFiles() {
     const filesList = document.getElementById('files-list');
@@ -74,7 +129,7 @@ async function loadFiles() {
         }
         
         filesList.innerHTML = files.map(file => `
-            <div class="file-item" data-id="${file.id}">
+            <div class="file-item" data-id="${file.id}" onclick="previewFile(${file.id}, '${file.filename}')">
                 <div class="file-info">
                     <span class="file-icon">${getFileIcon(file.filename)}</span>
                     <div class="file-details">
@@ -83,8 +138,8 @@ async function loadFiles() {
                     </div>
                 </div>
                 <div class="file-actions">
-                    <button onclick="downloadFile(${file.id}, '${file.filename}')" title="Download">⬇️</button>
-                    <button onclick="deleteFile(${file.id})" title="Delete">🗑️</button>
+                    <button onclick="event.stopPropagation(); downloadFile(${file.id}, '${file.filename}')" title="Download">⬇️</button>
+                    <button onclick="event.stopPropagation(); deleteFile(${file.id})" title="Delete">🗑️</button>
                 </div>
             </div>
         `).join('');
