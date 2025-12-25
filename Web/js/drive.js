@@ -1,4 +1,4 @@
-const API_URL = 'https://jed-api.onrender.com'; // Replace with your Render URL
+const API_URL = 'https://jed-uv1d.onrender.com';
 
 const token = localStorage.getItem('jed_token');
 const spaceId = localStorage.getItem('jed_space');

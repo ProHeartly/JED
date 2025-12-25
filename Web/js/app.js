@@ -1,4 +1,4 @@
-const API_URL = 'https://jed-api.onrender.com'; // Replace with your Render URL
+const API_URL = 'https://jed-uv1d.onrender.com';
 
 // Tab switching
 document.querySelectorAll('.tab').forEach(tab => {
