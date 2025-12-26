@@ -149,26 +149,117 @@ async function loadFiles() {
     }
 }
 
-// Upload file
+// Upload file with progress - uses direct upload for large files
 async function uploadFile(file) {
+    const DIRECT_UPLOAD_THRESHOLD = 5 * 1024 * 1024; // 5MB
+    
+    // Show uploading state
+    const filesList = document.getElementById('files-list');
+    const uploadingDiv = document.createElement('div');
+    uploadingDiv.className = 'file-item uploading';
+    uploadingDiv.innerHTML = `
+        <div class="file-info">
+            <span class="file-icon">⏳</span>
+            <div class="file-details">
+                <div class="file-name">Uploading: ${file.name}</div>
+                <div class="file-size" id="upload-progress">${formatSize(file.size)} - Starting...</div>
+            </div>
+        </div>
+    `;
+    filesList.insertBefore(uploadingDiv, filesList.firstChild);
+    
+    try {
+        if (file.size > DIRECT_UPLOAD_THRESHOLD) {
+            // Large file: use direct upload to Filebase
+            await directUpload(file, uploadingDiv);
+        } else {
+            // Small file: upload through API
+            await apiUpload(file, uploadingDiv);
+        }
+        
+        uploadingDiv.remove();
+        loadFiles();
+    } catch (err) {
+        uploadingDiv.remove();
+        alert(err.message || 'Upload failed');
+    }
+}
+
+// Direct upload to Filebase (for large files)
+async function directUpload(file, progressDiv) {
+    const progressEl = progressDiv.querySelector('#upload-progress');
+    progressEl.textContent = `${formatSize(file.size)} - Getting upload URL...`;
+    
+    // Step 1: Get presigned URL from API
+    const urlRes = await fetchWithWakeup(
+        `${API_URL}/files/get-upload-url?token=${token}&filename=${encodeURIComponent(file.name)}&size=${file.size}`,
+        { method: 'POST' }
+    );
+    
+    if (!urlRes.ok) {
+        throw new Error('Failed to get upload URL');
+    }
+    
+    const { upload_url, file_key, filename, size } = await urlRes.json();
+    
+    // Step 2: Upload directly to Filebase with progress
+    progressEl.textContent = `${formatSize(file.size)} - Uploading...`;
+    
+    await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        
+        xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                progressEl.textContent = `${formatSize(e.loaded)} / ${formatSize(e.total)} - ${percent}%`;
+            }
+        };
+        
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                resolve();
+            } else {
+                reject(new Error('Upload failed'));
+            }
+        };
+        
+        xhr.onerror = () => reject(new Error('Upload failed'));
+        
+        xhr.open('PUT', upload_url);
+        xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+        xhr.send(file);
+    });
+    
+    // Step 3: Confirm upload with API
+    progressEl.textContent = `${formatSize(file.size)} - Confirming...`;
+    
+    const confirmRes = await fetchWithWakeup(
+        `${API_URL}/files/confirm-upload?token=${token}&file_key=${encodeURIComponent(file_key)}&filename=${encodeURIComponent(filename)}&size=${size}`,
+        { method: 'POST' }
+    );
+    
+    if (!confirmRes.ok) {
+        throw new Error('Failed to confirm upload');
+    }
+}
+
+// API upload (for small files)
+async function apiUpload(file, progressDiv) {
+    const progressEl = progressDiv.querySelector('#upload-progress');
+    progressEl.textContent = `${formatSize(file.size)} - Uploading...`;
+    
     const formData = new FormData();
     formData.append('token', token);
     formData.append('file', file);
     
-    try {
-        const res = await fetchWithWakeup(`${API_URL}/files/upload`, {
-            method: 'POST',
-            body: formData
-        });
-        
-        if (!res.ok) {
-            alert('Upload failed');
-            return;
-        }
-        
-        loadFiles();
-    } catch (err) {
-        alert(err.message || 'Upload error');
+    const res = await fetch(`${API_URL}/files/upload`, {
+        method: 'POST',
+        body: formData
+    });
+    
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Upload failed');
     }
 }
 

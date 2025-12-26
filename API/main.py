@@ -141,6 +141,51 @@ async def upload_file(token: str = Form(...), file: UploadFile = File(...)):
     
     return {"message": "File uploaded", "filename": file.filename}
 
+# Get presigned URL for direct upload (for large files)
+@app.post("/files/get-upload-url")
+async def get_upload_url(token: str, filename: str, size: int):
+    space_id = get_space_from_token(token)
+    
+    # Generate unique key
+    file_key = f"{space_id}/{secrets.token_urlsafe(8)}_{filename}"
+    
+    # Generate presigned URL (valid for 15 minutes)
+    presigned_url = s3.generate_presigned_url(
+        'put_object',
+        Params={
+            'Bucket': BUCKET,
+            'Key': file_key,
+            'ContentType': get_content_type(filename)
+        },
+        ExpiresIn=900
+    )
+    
+    return {
+        "upload_url": presigned_url,
+        "file_key": file_key,
+        "filename": filename,
+        "size": size
+    }
+
+# Confirm upload after direct upload completes
+@app.post("/files/confirm-upload")
+async def confirm_upload(token: str, file_key: str, filename: str, size: int):
+    space_id = get_space_from_token(token)
+    
+    # Verify the file_key belongs to this space
+    if not file_key.startswith(f"{space_id}/"):
+        raise HTTPException(403, "Invalid file key")
+    
+    # Save metadata to DB
+    db = get_db()
+    db.execute(
+        "INSERT INTO files (space_id, filename, file_key, size, uploaded_at) VALUES (?, ?, ?, ?, ?)",
+        (space_id, filename, file_key, size, datetime.utcnow().isoformat())
+    )
+    db.commit()
+    
+    return {"message": "File uploaded", "filename": filename}
+
 @app.get("/files/download/{file_id}")
 async def download_file(file_id: int, token: str):
     space_id = get_space_from_token(token)
