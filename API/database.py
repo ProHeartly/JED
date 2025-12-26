@@ -40,7 +40,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             space_id TEXT NOT NULL,
             filename TEXT NOT NULL,
-            content BLOB NOT NULL,
+            file_key TEXT NOT NULL,
             size INTEGER NOT NULL,
             uploaded_at TEXT NOT NULL
         )

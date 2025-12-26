@@ -1,10 +1,14 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 from database import get_db, init_db
 import hashlib
 import secrets
+import mimetypes
+import os
+import boto3
+from botocore.config import Config
 from datetime import datetime
 
 app = FastAPI(title="JED - Just Enough Drives")
@@ -17,7 +21,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB limit per file
+# Filebase S3-compatible client
+s3 = boto3.client(
+    's3',
+    endpoint_url='https://s3.filebase.com',
+    aws_access_key_id=os.getenv('FILEBASE_ACCESS_KEY'),
+    aws_secret_access_key=os.getenv('FILEBASE_SECRET_KEY'),
+    config=Config(signature_version='s3v4')
+)
+BUCKET = os.getenv('FILEBASE_BUCKET', 'jed-storage')
 
 class SpaceCreate(BaseModel):
     space_id: str = Field(..., min_length=3, max_length=30)
@@ -29,6 +41,10 @@ class SpaceLogin(BaseModel):
 
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
+
+def get_content_type(filename: str) -> str:
+    mime_type, _ = mimetypes.guess_type(filename)
+    return mime_type or "application/octet-stream"
 
 def get_space_from_token(token: str):
     db = get_db()
@@ -84,41 +100,46 @@ async def login_space(space: SpaceLogin):
     db.commit()
     return {"token": token, "space_id": space.space_id}
 
+
 @app.get("/files")
 async def list_files(token: str):
     space_id = get_space_from_token(token)
     db = get_db()
     
     files = db.execute(
-        "SELECT id, filename, size, uploaded_at FROM files WHERE space_id = ?",
+        "SELECT id, filename, file_key, size, uploaded_at FROM files WHERE space_id = ?",
         (space_id,)
     ).fetchall()
     
-    return [{"id": f[0], "filename": f[1], "size": f[2], "uploaded_at": f[3]} for f in files]
+    return [{"id": f[0], "filename": f[1], "size": f[3], "uploaded_at": f[4]} for f in files]
 
 @app.post("/files/upload")
 async def upload_file(token: str = Form(...), file: UploadFile = File(...)):
     space_id = get_space_from_token(token)
     
     content = await file.read()
+    file_size = len(content)
     
-    if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(400, f"File too large. Max size is {MAX_FILE_SIZE // (1024*1024)}MB")
+    # Generate unique key for Filebase
+    file_key = f"{space_id}/{secrets.token_urlsafe(8)}_{file.filename}"
     
+    # Upload to Filebase
+    s3.put_object(
+        Bucket=BUCKET,
+        Key=file_key,
+        Body=content,
+        ContentType=get_content_type(file.filename)
+    )
+    
+    # Save metadata to DB
     db = get_db()
     db.execute(
-        "INSERT INTO files (space_id, filename, content, size, uploaded_at) VALUES (?, ?, ?, ?, ?)",
-        (space_id, file.filename, content, len(content), datetime.utcnow().isoformat())
+        "INSERT INTO files (space_id, filename, file_key, size, uploaded_at) VALUES (?, ?, ?, ?, ?)",
+        (space_id, file.filename, file_key, file_size, datetime.utcnow().isoformat())
     )
     db.commit()
     
     return {"message": "File uploaded", "filename": file.filename}
-
-import mimetypes
-
-def get_content_type(filename: str) -> str:
-    mime_type, _ = mimetypes.guess_type(filename)
-    return mime_type or "application/octet-stream"
 
 @app.get("/files/download/{file_id}")
 async def download_file(file_id: int, token: str):
@@ -126,15 +147,18 @@ async def download_file(file_id: int, token: str):
     db = get_db()
     
     file = db.execute(
-        "SELECT filename, content FROM files WHERE id = ? AND space_id = ?",
+        "SELECT filename, file_key FROM files WHERE id = ? AND space_id = ?",
         (file_id, space_id)
     ).fetchone()
     
     if not file:
         raise HTTPException(404, "File not found")
     
-    return Response(
-        content=file[1],
+    # Get from Filebase
+    response = s3.get_object(Bucket=BUCKET, Key=file[1])
+    
+    return StreamingResponse(
+        response['Body'].iter_chunks(),
         media_type="application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{file[0]}"'}
     )
@@ -145,17 +169,19 @@ async def preview_file(file_id: int, token: str):
     db = get_db()
     
     file = db.execute(
-        "SELECT filename, content FROM files WHERE id = ? AND space_id = ?",
+        "SELECT filename, file_key FROM files WHERE id = ? AND space_id = ?",
         (file_id, space_id)
     ).fetchone()
     
     if not file:
         raise HTTPException(404, "File not found")
     
+    # Get from Filebase
+    response = s3.get_object(Bucket=BUCKET, Key=file[1])
     content_type = get_content_type(file[0])
     
-    return Response(
-        content=file[1],
+    return StreamingResponse(
+        response['Body'].iter_chunks(),
         media_type=content_type,
         headers={"Content-Disposition": f'inline; filename="{file[0]}"'}
     )
@@ -166,13 +192,17 @@ async def delete_file(file_id: int, token: str):
     db = get_db()
     
     file = db.execute(
-        "SELECT id FROM files WHERE id = ? AND space_id = ?",
+        "SELECT file_key FROM files WHERE id = ? AND space_id = ?",
         (file_id, space_id)
     ).fetchone()
     
     if not file:
         raise HTTPException(404, "File not found")
     
+    # Delete from Filebase
+    s3.delete_object(Bucket=BUCKET, Key=file[0])
+    
+    # Delete from DB
     db.execute("DELETE FROM files WHERE id = ?", (file_id,))
     db.commit()
     
